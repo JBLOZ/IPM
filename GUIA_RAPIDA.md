@@ -3,13 +3,14 @@
 ## ⚡ Inicio Rápido
 
 ### 1. Instalar todo de una vez:
+
 ```bash
 cd IPM
 ./install.sh
 ```
 
 ### 2. O instalar manualmente:
-```bash
+
 # Crear entorno
 conda create -n IPM python=3.12
 conda activate IPM
@@ -19,9 +20,9 @@ pip install -r requirements.txt
 
 # Descargar modelos
 python download_models.py
-```
 
 ### 3. Ejecutar el juego:
+
 ```bash
 conda activate IPM
 python fruit_game.py
@@ -30,15 +31,18 @@ python fruit_game.py
 ## 🎯 Cómo Jugar
 
 ### Controles del Teclado:
+
 - **ESPACIO** → Iniciar juego / Reiniciar
 - **M** → Silenciar/Activar música
 - **ESC** → Salir
 
 ### Controles con la Cabeza:
+
 - **Mueve tu cabeza a la IZQUIERDA** → La cesta se mueve a la izquierda
 - **Mueve tu cabeza a la DERECHA** → La cesta se mueve a la derecha
 
 ### Reglas:
+
 ✅ Atrapa **FRUTAS** = +1 punto 🍎🍌🍓🍉
 ❌ Atrapa **BOMBAS** = -1 vida 💣
 ❌ Dejas caer **FRUTAS** = -1 vida
@@ -47,12 +51,14 @@ python fruit_game.py
 ## 💡 Consejos
 
 ### Para un mejor rendimiento:
+
 1. **Iluminación**: Asegúrate de tener buena luz en tu cara
 2. **Posición**: Colócate a 50-80 cm de la cámara
 3. **Fondo**: Un fondo despejado ayuda al tracking
 4. **Movimientos**: Mueve solo la cabeza, no todo el cuerpo
 
 ### Si el tracking no funciona bien:
+
 ```python
 # Edita config.py y cambia:
 self.model_path = os.path.join(os.path.dirname(__file__), 'models/pose_landmarker_heavy.task')
@@ -80,27 +86,33 @@ self.initial_lives = 2            # Menos vidas
 ## 🆘 Solución de Problemas
 
 ### Error: "No module named 'pygame'"
+
 ```bash
 conda activate IPM
 pip install pygame
 ```
 
 ### Error: "No se pudo abrir la cámara"
+
 - Cierra otras aplicaciones que usen la cámara (Zoom, Teams, etc.)
 - Verifica permisos de cámara en Configuración del Sistema
 
 ### Error: "No such file or directory: 'models/pose_landmarker_full.task'"
+
 ```bash
 python download_models.py
 ```
 
 ### El juego va muy lento
+
 - Cierra otras aplicaciones
 - Cambia a `pose_landmarker_lite.task` en `config.py`
 
 ### Las frutas/bombas no aparecen
+
 - Verifica que las carpetas `imgs/` y `sounds/` estén en la carpeta IPM
 - Comprueba que todas las imágenes existan:
+
 ```bash
 ls imgs/
 ls sounds/
@@ -116,19 +128,23 @@ ls sounds/
 ## 🎨 Personalización
 
 ### Cambiar las frutas o bombas:
+
 1. Reemplaza las imágenes en `imgs/`
 2. Mantén los mismos nombres de archivo
 3. Formato recomendado: PNG con transparencia
 4. Tamaño recomendado: 100x100 px
 
 ### Cambiar los sonidos:
+
 1. Reemplaza los archivos en `sounds/`
 2. Mantén los mismos nombres de archivo
 3. Formato: MP3
 4. Mantén volúmenes similares
 
 ### Cambiar colores del juego:
+
 Edita `settings.py`:
+
 ```python
 screen_bg_color = (172, 209, 175)  # RGB - Verde claro
 # Prueba otros colores:

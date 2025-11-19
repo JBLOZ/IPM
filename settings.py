@@ -4,8 +4,8 @@ import os
 pygame.init()
 
 # Dimensiones de la ventana del juego
-screen_width = 700
-screen_height = 500
+screen_width = 900/2
+screen_height = 1600/2
 screen_bg_color = (172, 209, 175)   # verde claro
 
 game_caption = "Fruit Catcher - Camera Edition"
