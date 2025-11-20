@@ -34,7 +34,7 @@ class FruitCatcherGame:
             {"name": "Manzana", "img": self.fruit_imgs[0], "value": 10},
             {"name": "Banana", "img": self.fruit_imgs[1], "value": 5},
             {"name": "Fresa", "img": self.fruit_imgs[2], "value": 15},
-            {"name": "Sandía", "img": self.fruit_imgs[3], "value": 20},
+            {"name": "Sandia", "img": self.fruit_imgs[3], "value": 20},
         ]
         self.bomb_img = pygame.transform.scale(bomb_img.convert_alpha(), (60, 60))
         self.heart_img = pygame.transform.scale(heart_img.convert_alpha(), (30, 30))
@@ -232,6 +232,55 @@ class FruitCatcherGame:
             self.bucket_x = max(0, min(self.bucket_x, frame_width - 80))
             self.bucket_y = max(0, min(self.bucket_y, frame_height - 80))
     
+    # --- RETRO 80s CONSTANTS ---
+    NEON_PINK = (180, 105, 255)      # Hot Pink (BGR)
+    NEON_CYAN = (255, 255, 0)        # Cyan (BGR)
+    NEON_GREEN = (50, 255, 50)       # Lime Green (BGR)
+    NEON_YELLOW = (0, 255, 255)      # Bright Yellow (BGR)
+    NEON_PURPLE = (255, 0, 255)      # Magenta/Purple (BGR)
+    GRID_COLOR = (50, 0, 50)         # Dark Purple for grid
+    
+    # Precomputed masks
+    crt_mask = None
+    
+    def _init_crt_masks(self, width, height):
+        """Precalcula las máscaras para el efecto CRT"""
+        # 1. Scanlines (lineas horizontales oscuras)
+        scanline_mask = np.ones((height, width, 3), dtype=np.float32)
+        scanline_mask[1::2, :] = 0.75  # Oscurecer lineas alternas
+        
+        # 2. Vignette (oscurecer bordes)
+        X_result, Y_result = np.meshgrid(np.linspace(-1, 1, width), np.linspace(-1, 1, height))
+        distance_map = np.sqrt(X_result**2 + Y_result**2)
+        vignette_mask = 1 - np.clip(distance_map - 0.4, 0, 1) * 0.6
+        vignette_mask = np.stack([vignette_mask] * 3, axis=2)
+        
+        # Combinar ambas máscaras en una sola
+        self.crt_mask = (scanline_mask * vignette_mask).astype(np.float32)
+
+    def draw_neon_text(self, img, text, pos, font_scale, color, thickness=2, font=cv2.FONT_HERSHEY_TRIPLEX):
+        """Dibuja texto con efecto de brillo neon"""
+        x, y = pos
+        # Glow effect (thick dark outline/shadow)
+        cv2.putText(img, text, (x, y), font, font_scale, color, thickness, cv2.LINE_AA)
+        # Inner bright core
+        cv2.putText(img, text, (x, y), font, font_scale, (255, 255, 255), 1, cv2.LINE_AA)
+
+    def apply_crt_effect(self, canvas):
+        """Aplica efecto de scanlines y viñeta usando máscara precalculada"""
+        h, w = canvas.shape[:2]
+        
+        # Inicializar máscara si no existe o si cambió el tamaño
+        if self.crt_mask is None or self.crt_mask.shape[:2] != (h, w):
+            self._init_crt_masks(w, h)
+            
+        # Aplicar efectos usando multiplicación rápida
+        # Convertir canvas a float, multiplicar por mascara, y volver a uint8
+        # Optimizacion: cv2.multiply maneja uint8 * float si se usa correctamente, 
+        # pero aquí lo más rápido y seguro en Python puro es:
+        
+        return cv2.multiply(canvas, self.crt_mask, dtype=cv2.CV_8U)
+
     def draw_game_overlay(self, frame):
         """Dibuja los elementos del juego sobre el frame de la cámara con diseño vertical"""
         h, w = frame.shape[:2]
@@ -242,10 +291,25 @@ class FruitCatcherGame:
         total_width = self.window_width
         total_height = self.window_height
         
-        # Crear canvas negro
+        # Crear canvas negro (fondo retro)
         canvas = np.zeros((total_height, total_width, 3), dtype=np.uint8)
         
+        # Dibujar Grid Retro en el fondo (paneles laterales)
+        grid_size = 40
+        # Lineas verticales
+        for x in range(0, total_width, grid_size):
+            cv2.line(canvas, (x, 0), (x, total_height), self.GRID_COLOR, 1)
+        # Lineas horizontales
+        for y in range(0, total_height, grid_size):
+            cv2.line(canvas, (0, y), (total_width, y), self.GRID_COLOR, 1)
+            
         # Colocar el frame de la cámara en el centro
+        # Dibujar borde neon alrededor de la camara
+        cv2.rectangle(canvas, 
+                     (self.panel_width - 5, 0), 
+                     (self.panel_width + w + 5, h), 
+                     self.NEON_PURPLE, -1)
+        
         canvas[0:h, self.panel_width:self.panel_width+w] = frame
         
         # Dibujar frutas usando el canal alfa (ajustando posición X)
@@ -294,15 +358,16 @@ class FruitCatcherGame:
             canvas[y_pos:y_pos+80, x_pos:x_pos+80] = blended
         
         # === PANEL IZQUIERDO: Puntuación y Vidas ===
-        left_x = 20
-        cv2.putText(canvas, 'SCORE', (left_x, 60), 
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2, cv2.LINE_AA)
-        cv2.putText(canvas, f'{self.score}', (left_x + 20, 120), 
-                   cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 255, 0), 3, cv2.LINE_AA)
+        left_x = 40
+        
+        # Titulo SCORE
+        self.draw_neon_text(canvas, 'SCORE', (left_x, 60), 1.0, self.NEON_CYAN)
+        # Valor SCORE
+        self.draw_neon_text(canvas, f'{self.score:05d}', (left_x, 120), 1.5, self.NEON_PINK)
 
         # Vidas debajo de la puntuación
-        cv2.putText(canvas, 'VIDAS', (left_x, 200), 
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2, cv2.LINE_AA)
+        self.draw_neon_text(canvas, 'LIVES', (left_x, 200), 1.0, self.NEON_CYAN)
+        
         for i in range(self.lives):
             y_heart = 240 + i * 50
             if y_heart < total_height - 30:
@@ -314,28 +379,31 @@ class FruitCatcherGame:
                 alpha = np.transpose(heart_alpha)
                 alpha_normalized = alpha.astype(float) / 255.0
                 alpha_3ch = np.stack([alpha_normalized] * 3, axis=2)
-                x_heart_pos = left_x + 40
+                x_heart_pos = left_x + 10
                 roi = canvas[y_heart:y_heart+heart_size, x_heart_pos:x_heart_pos+heart_size]
                 blended = (heart_bgr * alpha_3ch + roi * (1 - alpha_3ch)).astype(np.uint8)
                 canvas[y_heart:y_heart+heart_size, x_heart_pos:x_heart_pos+heart_size] = blended
 
-        # Mostrar la velocidad (un poco más abajo a la derecha del panel izquierdo)
-        cv2.putText(canvas, 'SPEED', (left_x, 420), 
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2, cv2.LINE_AA)
-        cv2.putText(canvas, f'{self.fruit_speed:.1f}', (left_x + 20, 460), 
-                   cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 0), 2, cv2.LINE_AA)
+        # Mostrar la velocidad
+        self.draw_neon_text(canvas, 'SPEED', (left_x, 420), 0.8, self.NEON_CYAN)
+        # Barra de velocidad retro
+        bar_width = 150
+        bar_height = 20
+        fill_width = int((self.fruit_speed / self.max_fruit_speed) * bar_width)
+        cv2.rectangle(canvas, (left_x, 450), (left_x + bar_width, 450 + bar_height), (50, 50, 50), -1) # Fondo barra
+        cv2.rectangle(canvas, (left_x, 450), (left_x + fill_width, 450 + bar_height), self.NEON_YELLOW, -1) # Relleno
+        cv2.rectangle(canvas, (left_x, 450), (left_x + bar_width, 450 + bar_height), (255, 255, 255), 2) # Borde
 
-        # === LISTA DE PUNTUACIONES POR FRUTA (debajo de vidas y puntuacion) ===
-        cv2.putText(canvas, 'PUNTUACIONES', (left_x, 520), 
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2, cv2.LINE_AA)
-        # Dibujar cada fruta con su icono y valor
+        # === LISTA DE PUNTUACIONES POR FRUTA ===
+        self.draw_neon_text(canvas, 'VALUES', (left_x, 520), 0.8, self.NEON_CYAN)
+        
         start_y = 560
-        row_h = 48
+        row_h = 50
         for idx, ftype in enumerate(self.fruit_types):
             y_row = start_y + idx * row_h
             if y_row + 40 >= total_height:
                 break
-            # Dibujar icono (pequeño)
+            # Dibujar icono
             icon_size = 36
             icon = pygame.transform.scale(ftype["img"], (icon_size, icon_size))
             icon_rgba = pygame.surfarray.array3d(icon)
@@ -349,160 +417,111 @@ class FruitCatcherGame:
             blended = (icon_bgr * alpha_3ch + roi * (1 - alpha_3ch)).astype(np.uint8)
             canvas[y_row:y_row+icon_size, x_icon:x_icon+icon_size] = blended
 
-            # Texto con el nombre y puntos
-            text_x = x_icon + icon_size + 10
-            cv2.putText(canvas, f'{ftype["name"]}: {ftype["value"]} pts', (text_x, y_row + 26), 
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.7, (220, 220, 220), 2, cv2.LINE_AA)
+            # Texto
+            text_x = x_icon + icon_size + 15
+            self.draw_neon_text(canvas, f'{ftype["value"]} PTS', (text_x, y_row + 26), 0.6, self.NEON_GREEN)
         
-        return canvas
+        # Aplicar efecto CRT final
+        return self.apply_crt_effect(canvas)
     
     def draw_start_screen(self):
-        """Dibuja la pantalla de inicio con fondo negro (sin cámara)"""
+        """Dibuja la pantalla de inicio con estilo retro"""
         h = self.window_height
         w = self.window_width
         
-        # Crear fondo completamente negro con proporción 16:9
         canvas = np.zeros((h, w, 3), dtype=np.uint8)
         
-        # Centrar todo en el canvas completo
+        # Grid de fondo
+        grid_size = 50
+        for x in range(0, w, grid_size):
+            cv2.line(canvas, (x, 0), (x, h), self.GRID_COLOR, 1)
+        for y in range(0, h, grid_size):
+            cv2.line(canvas, (0, y), (w, y), self.GRID_COLOR, 1)
+
         center_x = w // 2
 
-        # Title centered
+        # Title
         title = 'FRUIT CATCHER'
-        title_scale = 3.0
-        title_thick = 5
-        (t_w, t_h), t_base = cv2.getTextSize(title, cv2.FONT_HERSHEY_SIMPLEX, title_scale, title_thick)
-        cv2.putText(canvas, title, (center_x - t_w // 2, 250), cv2.FONT_HERSHEY_SIMPLEX, title_scale, (255, 255, 255), title_thick)
+        (t_w, t_h), _ = cv2.getTextSize(title, cv2.FONT_HERSHEY_TRIPLEX, 3.0, 5)
+        self.draw_neon_text(canvas, title, (center_x - t_w // 2, 250), 3.0, self.NEON_PINK, 5)
 
-        # Subtitle centered
-        subtitle = 'Camera Edition'
-        sub_scale = 1.5
-        sub_thick = 3
-        (s_w, s_h), s_base = cv2.getTextSize(subtitle, cv2.FONT_HERSHEY_SIMPLEX, sub_scale, sub_thick)
-        cv2.putText(canvas, subtitle, (center_x - s_w // 2, 320), cv2.FONT_HERSHEY_SIMPLEX, sub_scale, (255, 255, 255), sub_thick)
+        # Subtitle
+        subtitle = 'RETRO EDITION'
+        (s_w, s_h), _ = cv2.getTextSize(subtitle, cv2.FONT_HERSHEY_TRIPLEX, 1.5, 3)
+        self.draw_neon_text(canvas, subtitle, (center_x - s_w // 2, 320), 1.5, self.NEON_CYAN, 3)
 
-        # Instrucciones (centred). We'll highlight the key words.
-        instr_scale = 1.0
-        instr_thick = 2
-        instr_full = 'Presiona ESPACIO para comenzar'
-        # Split so we can color the key
-        prefix = 'Presiona '
-        key = 'ESPACIO'
-        suffix = ' para comenzar'
-        (p_w, p_h), _ = cv2.getTextSize(prefix, cv2.FONT_HERSHEY_SIMPLEX, instr_scale, instr_thick)
-        (k_w, k_h), _ = cv2.getTextSize(key, cv2.FONT_HERSHEY_SIMPLEX, instr_scale, instr_thick)
-        (u_w, u_h), _ = cv2.getTextSize(suffix, cv2.FONT_HERSHEY_SIMPLEX, instr_scale, instr_thick)
-        total_w = p_w + k_w + u_w
-        start_x = center_x - total_w // 2
-        y_instr = 450
-        cv2.putText(canvas, prefix, (start_x, y_instr), cv2.FONT_HERSHEY_SIMPLEX, instr_scale, (255, 255, 255), instr_thick)
-        cv2.putText(canvas, key, (start_x + p_w, y_instr), cv2.FONT_HERSHEY_SIMPLEX, instr_scale, (50, 205, 50), instr_thick)
-        cv2.putText(canvas, suffix, (start_x + p_w + k_w, y_instr), cv2.FONT_HERSHEY_SIMPLEX, instr_scale, (255, 255, 255), instr_thick)
+        # Blinking "INSERT COIN" (Press Space)
+        if (pygame.time.get_ticks() // 500) % 2 == 0:
+            msg = 'PRESS SPACE TO START'
+            (m_w, m_h), _ = cv2.getTextSize(msg, cv2.FONT_HERSHEY_TRIPLEX, 1.2, 2)
+            self.draw_neon_text(canvas, msg, (center_x - m_w // 2, 500), 1.2, self.NEON_YELLOW, 2)
 
-        # Other instructions centered using measured text widths
-        other1 = 'Mueve tu cabeza para mover la cesta'
-        other2 = 'Atrapa frutas y evita bombas!'
-        o_scale = 0.9
-        o_thick = 2
-        (o1_w, o1_h), _ = cv2.getTextSize(other1, cv2.FONT_HERSHEY_SIMPLEX, o_scale, o_thick)
-        (o2_w, o2_h), _ = cv2.getTextSize(other2, cv2.FONT_HERSHEY_SIMPLEX, o_scale, o_thick)
-        cv2.putText(canvas, other1, (center_x - o1_w // 2, 500), cv2.FONT_HERSHEY_SIMPLEX, o_scale, (255, 255, 255), o_thick)
-        cv2.putText(canvas, other2, (center_x - o2_w // 2, 550), cv2.FONT_HERSHEY_SIMPLEX, o_scale, (255, 255, 255), o_thick)
-
-        # Exit instruction with highlighted key
-        exit_prefix = 'Presiona '
-        exit_key = 'ESC'
-        exit_suffix = ' para salir'
-        (ep_w, ep_h), _ = cv2.getTextSize(exit_prefix, cv2.FONT_HERSHEY_SIMPLEX, 0.8, 2)
-        (ek_w, ek_h), _ = cv2.getTextSize(exit_key, cv2.FONT_HERSHEY_SIMPLEX, 0.8, 2)
-        (es_w, es_h), _ = cv2.getTextSize(exit_suffix, cv2.FONT_HERSHEY_SIMPLEX, 0.8, 2)
-        total_exit_w = ep_w + ek_w + es_w
-        start_exit_x = center_x - total_exit_w // 2
-        y_exit = 700
-        cv2.putText(canvas, exit_prefix, (start_exit_x, y_exit), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
-        cv2.putText(canvas, exit_key, (start_exit_x + ep_w, y_exit), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 191, 255), 2)
-        cv2.putText(canvas, exit_suffix, (start_exit_x + ep_w + ek_w, y_exit), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
-        # --- Opciones de modo de juego (1/2/3) ---
-        mode1 = '1. Cabeza (cesta en la cabeza)'
-        mode2 = '2. Mano derecha (cesta en mano derecha)'
-        mode3 = '3. Mano izquierda (cesta en mano izquierda)'
-        m_scale = 0.7
-        m_thick = 2
-        (m1_w, _), _ = cv2.getTextSize(mode1, cv2.FONT_HERSHEY_SIMPLEX, m_scale, m_thick)
-        (m2_w, _), _ = cv2.getTextSize(mode2, cv2.FONT_HERSHEY_SIMPLEX, m_scale, m_thick)
-        (m3_w, _), _ = cv2.getTextSize(mode3, cv2.FONT_HERSHEY_SIMPLEX, m_scale, m_thick)
-        # Draw each centered and highlight selected
-        m_start_y = 760
-        # mode 1
-        color1 = (0, 255, 0) if self.play_mode == 1 else (200, 200, 200)
-        cv2.putText(canvas, mode1, (center_x - m1_w // 2, m_start_y), cv2.FONT_HERSHEY_SIMPLEX, m_scale, color1, m_thick)
-        # mode 2
-        color2 = (0, 255, 0) if self.play_mode == 2 else (200, 200, 200)
-        cv2.putText(canvas, mode2, (center_x - m2_w // 2, m_start_y + 34), cv2.FONT_HERSHEY_SIMPLEX, m_scale, color2, m_thick)
-        # mode 3
-        color3 = (0, 255, 0) if self.play_mode == 3 else (200, 200, 200)
-        cv2.putText(canvas, mode3, (center_x - m3_w // 2, m_start_y + 68), cv2.FONT_HERSHEY_SIMPLEX, m_scale, color3, m_thick)
+        # Instructions
+        instr1 = 'MOVE HEAD TO CONTROL BUCKET'
+        instr2 = 'AVOID BOMBS!'
+        (i1_w, _), _ = cv2.getTextSize(instr1, cv2.FONT_HERSHEY_TRIPLEX, 0.8, 2)
+        (i2_w, _), _ = cv2.getTextSize(instr2, cv2.FONT_HERSHEY_TRIPLEX, 0.8, 2)
         
-        return canvas
+        self.draw_neon_text(canvas, instr1, (center_x - i1_w // 2, 600), 0.8, self.NEON_GREEN)
+        self.draw_neon_text(canvas, instr2, (center_x - i2_w // 2, 650), 0.8, self.NEON_GREEN)
+
+        # Exit
+        exit_msg = 'PRESS ESC TO EXIT'
+        (e_w, _), _ = cv2.getTextSize(exit_msg, cv2.FONT_HERSHEY_TRIPLEX, 0.7, 1)
+        self.draw_neon_text(canvas, exit_msg, (center_x - e_w // 2, 800), 0.7, (200, 200, 200))
+
+        # Modes
+        m_start_y = 860
+        modes = [
+            "1. HEAD CONTROL",
+            "2. RIGHT HAND",
+            "3. LEFT HAND"
+        ]
+        for i, mode_text in enumerate(modes):
+            color = self.NEON_GREEN if self.play_mode == (i+1) else (100, 100, 100)
+            (mw, _), _ = cv2.getTextSize(mode_text, cv2.FONT_HERSHEY_TRIPLEX, 0.8, 2)
+            self.draw_neon_text(canvas, mode_text, (center_x - mw // 2, m_start_y + i*40), 0.8, color)
+        
+        return self.apply_crt_effect(canvas)
     
     def draw_game_over_screen(self):
-        """Dibuja la pantalla de game over con fondo negro (sin cámara)"""
+        """Dibuja la pantalla de game over retro"""
         h = self.window_height
         w = self.window_width
         
-        # Crear fondo completamente negro con proporción 16:9
         canvas = np.zeros((h, w, 3), dtype=np.uint8)
         
-        # Centrar todo en el canvas completo
+        # Grid
+        grid_size = 50
+        for x in range(0, w, grid_size):
+            cv2.line(canvas, (x, 0), (x, h), self.GRID_COLOR, 1)
+        for y in range(0, h, grid_size):
+            cv2.line(canvas, (0, y), (w, y), self.GRID_COLOR, 1)
+        
         center_x = w // 2
 
-        # Game Over title centered
+        # GAME OVER
         title = 'GAME OVER'
-        title_scale = 3.0
-        title_thick = 5
-        (t_w, t_h), _ = cv2.getTextSize(title, cv2.FONT_HERSHEY_SIMPLEX, title_scale, title_thick)
-        cv2.putText(canvas, title, (center_x - t_w // 2, 250), cv2.FONT_HERSHEY_SIMPLEX, title_scale, (255, 255, 255), title_thick)
+        (t_w, t_h), _ = cv2.getTextSize(title, cv2.FONT_HERSHEY_TRIPLEX, 3.0, 5)
+        self.draw_neon_text(canvas, title, (center_x - t_w // 2, 250), 3.0, (0, 0, 255), 5) # Red Neon
 
-        # Scores centered
-        score_text = f'Tu puntuacion: {self.score}'
-        best_text = f'Mejor puntuacion: {self.highest_score}'
-        (sc_w, sc_h), _ = cv2.getTextSize(score_text, cv2.FONT_HERSHEY_SIMPLEX, 1.5, 3)
-        (b_w, b_h), _ = cv2.getTextSize(best_text, cv2.FONT_HERSHEY_SIMPLEX, 1.5, 3)
-        cv2.putText(canvas, score_text, (center_x - sc_w // 2, 400), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (255, 255, 255), 3)
-        cv2.putText(canvas, best_text, (center_x - b_w // 2, 450), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (255, 255, 255), 3)
-
-        # Instructions with highlighted keys
-        instr_scale = 1.0
-        instr_thick = 2
-        # Retry line: highlight ESPACIO
-        prefix = 'Presiona '
-        key = 'ESPACIO'
-        suffix = ' para reintentar'
-        (p_w, _), _ = cv2.getTextSize(prefix, cv2.FONT_HERSHEY_SIMPLEX, instr_scale, instr_thick)
-        (k_w, _), _ = cv2.getTextSize(key, cv2.FONT_HERSHEY_SIMPLEX, instr_scale, instr_thick)
-        (s_w, _), _ = cv2.getTextSize(suffix, cv2.FONT_HERSHEY_SIMPLEX, instr_scale, instr_thick)
-        total_w = p_w + k_w + s_w
-        start_x = center_x - total_w // 2
-        y_retry = 600
-        cv2.putText(canvas, prefix, (start_x, y_retry), cv2.FONT_HERSHEY_SIMPLEX, instr_scale, (255, 255, 255), instr_thick)
-        cv2.putText(canvas, key, (start_x + p_w, y_retry), cv2.FONT_HERSHEY_SIMPLEX, instr_scale, (50, 205, 50), instr_thick)
-        cv2.putText(canvas, suffix, (start_x + p_w + k_w, y_retry), cv2.FONT_HERSHEY_SIMPLEX, instr_scale, (255, 255, 255), instr_thick)
-
-        # Exit line: highlight ESC
-        e_prefix = 'Presiona '
-        e_key = 'ESC'
-        e_suffix = ' para salir'
-        (ep_w, _), _ = cv2.getTextSize(e_prefix, cv2.FONT_HERSHEY_SIMPLEX, 1.0, 2)
-        (ek_w, _), _ = cv2.getTextSize(e_key, cv2.FONT_HERSHEY_SIMPLEX, 1.0, 2)
-        (es_w, _), _ = cv2.getTextSize(e_suffix, cv2.FONT_HERSHEY_SIMPLEX, 1.0, 2)
-        total_e_w = ep_w + ek_w + es_w
-        start_ex = center_x - total_e_w // 2
-        y_exit = 650
-        cv2.putText(canvas, e_prefix, (start_ex, y_exit), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 255), 2)
-        cv2.putText(canvas, e_key, (start_ex + ep_w, y_exit), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 191, 255), 2)
-        cv2.putText(canvas, e_suffix, (start_ex + ep_w + ek_w, y_exit), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 255), 2)
+        # Scores
+        score_text = f'SCORE: {self.score}'
+        best_text = f'HIGH SCORE: {self.highest_score}'
         
-        return canvas
+        (sc_w, _), _ = cv2.getTextSize(score_text, cv2.FONT_HERSHEY_TRIPLEX, 1.5, 3)
+        (b_w, _), _ = cv2.getTextSize(best_text, cv2.FONT_HERSHEY_TRIPLEX, 1.5, 3)
+        
+        self.draw_neon_text(canvas, score_text, (center_x - sc_w // 2, 400), 1.5, self.NEON_CYAN)
+        self.draw_neon_text(canvas, best_text, (center_x - b_w // 2, 460), 1.5, self.NEON_YELLOW)
+
+        # Retry
+        if (pygame.time.get_ticks() // 500) % 2 == 0:
+            retry = 'PRESS SPACE TO RETRY'
+            (r_w, _), _ = cv2.getTextSize(retry, cv2.FONT_HERSHEY_TRIPLEX, 1.2, 2)
+            self.draw_neon_text(canvas, retry, (center_x - r_w // 2, 600), 1.2, self.NEON_GREEN)
+
+        return self.apply_crt_effect(canvas)
     
     def run(self):
         """Loop principal del juego"""
@@ -667,6 +686,14 @@ class FruitCatcherGame:
                 display_frame = canvas
                 
                 # Mostrar frame
+                
+                # Calcular y mostrar FPS
+                current_ticks = cv2.getTickCount()
+                fps_calc = cv2.getTickFrequency() / (current_ticks - timestamp_fps_start) if 'timestamp_fps_start' in locals() else 30.0
+                timestamp_fps_start = current_ticks
+                
+                cv2.putText(display_frame, f"FPS: {int(fps_calc)}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+                
                 cv2.imshow(win_name, display_frame)
                 
                 # Manejar teclas
