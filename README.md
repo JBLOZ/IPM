@@ -39,7 +39,7 @@ El juego ofrece tres modos de control:
    bash setup_fruitgame.sh
    ```
    Este script realizará las siguientes acciones automáticamente:
-   - Detectará si tienes Python 3.11 instalado. Si no está disponible, te indicará cómo instalarlo.
+   - Detectará si tienes Python 3.11 instalado. Si no está disponible se instalará automáticamente, si falla la instalación te indicará como instalarlo manualmente.
    - Creará un entorno virtual (venv).
    - Activará el entorno virtual.
    - Instalará las dependencias listadas en `requirements.txt`.
