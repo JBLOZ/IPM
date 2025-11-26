@@ -48,6 +48,17 @@ if [ $? -ne 0 ]; then
 fi
 
 echo "============================================="
+echo "  DESCARGANDO MODELOS..."
+echo "============================================="
+# Ejecutar directamente el script de descarga de modelos
+python download_models.py
+
+if [ $? -ne 0 ]; then
+    echo "[ERROR] Ocurrió un problema al descargar los modelos."
+    exit 1
+fi
+
+echo "============================================="
 echo "  INSTALACION COMPLETADA"
 echo "============================================="
 echo "Activa el entorno virtual con: source venv/Scripts/activate (desde la gitbash en Windows) o source venv/bin/activate (en Linux/Mac)"
