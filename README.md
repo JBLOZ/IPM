@@ -1,5 +1,7 @@
 # Fruit Catcher - Retro Edition
 
+[Ver video del juego](https://www.youtube.com/watch?v=NOrhn-qOLtM)
+
 ## Descripción
 Fruit Catcher es un juego interactivo diseñado para fomentar el movimiento y la coordinación. Es ideal para personas con movilidad reducida, ya que ofrece distintos modos de juego que permiten jugar utilizando diferentes partes del cuerpo, como la cabeza o las manos. El juego utiliza la cámara para detectar movimientos y controlar la cesta que atrapa frutas.
 
