@@ -685,15 +685,7 @@ class FruitCatcherGame:
                 # (compatible con todas las versiones de OpenCV)
                 display_frame = canvas
                 
-                # Mostrar frame
-                
-                # Calcular y mostrar FPS
-                current_ticks = cv2.getTickCount()
-                fps_calc = cv2.getTickFrequency() / (current_ticks - timestamp_fps_start) if 'timestamp_fps_start' in locals() else 30.0
-                timestamp_fps_start = current_ticks
-                
-                cv2.putText(display_frame, f"FPS: {int(fps_calc)}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
-                
+                display_frame = canvas
                 cv2.imshow(win_name, display_frame)
                 
                 # Manejar teclas
